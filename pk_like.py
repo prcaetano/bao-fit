@@ -49,11 +49,12 @@ class BAOLikelihood(GaussianLikelihood):
 
     def build_data(self):
         pkdata_fname = self.options.get_string("pk_fname")
+        kmin = self.options.get_double("kmin", 0.)
         kmax = self.options.get_double("kmax", np.inf)
 
         pkdata = np.loadtxt(pkdata_fname)
         k, pkdata = pkdata[:,0], pkdata[:,1:]
-        self.mask_k = k < kmax
+        self.mask_k = (k < kmax) * (k > kmin)
         k, pkdata = k[self.mask_k], pkdata[self.mask_k]
 
         self.n_k, self.n_data_multipoles = pkdata.shape

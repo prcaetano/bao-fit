@@ -7,8 +7,8 @@ from names import bao_par_section, syst_par_section, bao_data_section
 
 def setup(options):
     max_multipole = options.get_int(option_section, "max_multipole", 2)
-    min_k_power = options.get_int(option_section, "min_shape_k_power", 0)
-    max_k_power = options.get_int(option_section, "max_shape_k_power", 2)
+    min_k_power = options.get_int(option_section, "min_k_power", 0)
+    max_k_power = options.get_int(option_section, "max_k_power", 2)
     multipoles = np.arange(0, max_multipole+2, 2)
 
     data = {
@@ -38,9 +38,6 @@ def execute(block, config):
         syst_correction = np.zeros_like(k, dtype=float)
         for power, a in zip(powers, a_s):
             syst_correction +=  a * k**power
-        a0 = block[syst_par_section, "a0_l{}".format(2*l)]
-        a1 = block[syst_par_section, "a1_l{}".format(2*l)]
-        a2 = block[syst_par_section, "a2_l{}".format(2*l)]
 
         pk_multipole += syst_correction.flatten()
         pk_multipoles[l] = pk_multipole

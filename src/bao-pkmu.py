@@ -1,7 +1,8 @@
+import sys
 import numpy as np
 from scipy.interpolate import interp1d
 from cosmosis.datablock import option_section
-from names import bao_par_section, bao_data_section
+from names import bao_par_section, bao_data_section, template_data_section
 
 
 def setup(options):
@@ -14,17 +15,7 @@ def setup(options):
     k = np.linspace(kmin, kmax, nk).reshape(-1, 1)
     mu = np.linspace(0., 1., nmu)
 
-    no_wiggle_template_fname = options.get_string(option_section, "no_wiggle_template_fname")
-    bao_template_fname = options.get_string(option_section, "bao_template_fname")
-    k_no_wiggle, pk_no_wiggle = np.loadtxt(no_wiggle_template_fname, unpack=True)
-    k_bao, pk_bao = np.loadtxt(bao_template_fname, unpack=True)
-
-    pk_no_wiggle_interp = interp1d(k_no_wiggle, pk_no_wiggle)
-    pk_bao_interp = interp1d(k_bao, pk_bao)
-
     loaded_data = dict()
-    loaded_data["pk_no_wiggle_interp"] = pk_no_wiggle_interp
-    loaded_data["pk_bao_interp"] = pk_bao_interp
     loaded_data["k"] = k
     loaded_data["mu"] = mu
 
@@ -32,10 +23,27 @@ def setup(options):
 
 
 def execute(block, config):
-    pk_no_wiggle_interp = config["pk_no_wiggle_interp"]
-    pk_bao_interp = config["pk_bao_interp"]
     k = config["k"]
     mu = config["mu"]
+
+    k_nw = block[template_data_section, "k_nw"]
+    pk_nw = block[template_data_section, "pk_nw"]
+    k_bao = block[template_data_section, "k_bao"]
+    pk_bao = block[template_data_section, "pk_bao"]
+
+    pk_no_wiggle_interp = interp1d(k_nw, pk_nw)
+    pk_bao_interp = interp1d(k_bao, pk_bao)
+
+    if (k_nw.min() > k.min()) or (k_nw.max() < k.max()):
+        print("WARNING: The range of the no wiggle template don't cover the k range "
+              "you specified.", file=sys.stderr)
+        print("k no wiggle range = {}, {}".format(k_nw.min(), k_nw.max()),
+              file=sys.stderr)
+    if (k_bao.min() > k.min()) or (k_bao.max() < k.max()):
+        print("WARNING: The range of the linear template don't cover the k range "
+              "you specified.", file=sys.stderr)
+        print("k linear range = {}, {}".format(k_bao.min(), k_bao.max()),
+              file=sys.stderr)
 
     sigma_fog = block[bao_par_section, "sigma_fog"]
     sigma_rec = block[bao_par_section, "sigma_rec"]

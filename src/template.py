@@ -2,6 +2,8 @@ import sys
 import numpy as np
 from cosmosis.datablock import option_section, names
 from names import template_data_section
+from scipy.interpolate import UnivariateSpline
+from scipy.signal import find_peaks
 
 
 def setup(options):
@@ -28,10 +30,10 @@ def setup(options):
         k_no_wiggle, pk_no_wiggle = np.loadtxt(no_wiggle_template_fname, unpack=True)
     else:
         print("No no_wiggle_template_fname passed. I'll compute an Eisenstein&Hu "
-              "template at the given cosmology, with an polynomial broadband "
-              "term fitted together.", file=sys.stderr)
+              "template at the given cosmology.", file=sys.stderr)
         use_eh_sound_horizon = options.get_bool(option_section, "use_eh_sound_horizon", True)
         use_eh_k_eq = options.get_bool(option_section, "use_eh_k_eq", True)
+        spline_residual_broadband = options.get_bool(option_section, "spline_residual_broadband", False)
         pmin = options.get_int(option_section, "min_power_broadband_polynomial", 0)
         pmax = options.get_int(option_section, "max_power_broadband_polynomial", 0)
 
@@ -39,7 +41,7 @@ def setup(options):
     vars_to_save = ["loaded_bao_template", "loaded_no_wiggle_template", "k_bao", "pk_bao", "z",
                     "output_bao_template_fname", "k_nw", "pk_nw",
                     "output_no_wiggle_template_fname", "pmin", "pmax",
-                    "use_eh_sound_horizon", "use_eh_k_eq"]
+                    "use_eh_sound_horizon", "use_eh_k_eq", "spline_residual_broadband"]
     loaded_data = dict()
     for key in vars_to_save:
         if key in locals():
@@ -77,6 +79,8 @@ def execute(block, config):
         use_eh_sound_horizon = config["use_eh_sound_horizon"]
     if "use_eh_k_eq" in config:
         use_eh_k_eq = config["use_eh_k_eq"]
+    if "spline_residual_broadband" in config:
+        spline_residual_broadband = config["spline_residual_broadband"]
 
 
     if not loaded_bao_template:
@@ -115,13 +119,13 @@ def execute(block, config):
                               Ob=block[names.cosmological_parameters, "omega_b"],
                               ns=block[names.cosmological_parameters, "n_s"],
                               s=s, k_eq=k_eq)
-        # Normalizing pk_nw scale to pk_bao minimizing the residue (bao)
-        #delta_k = np.ones_like(k_nw)
-        #delta_k[:-1] = k_nw[1:] - k_nw[:-1]
-        #delta_k[-1] = delta_k[-2]
-        #pk_nw = pk_nw * (pk_nw * pk_bao * delta_k).sum() / (pk_nw * pk_nw * delta_k).sum()
         # Normalizing pk_nw scale to pk_bao at large scales
         pk_nw = pk_nw * pk_bao[0] / pk_nw[0]
+
+        if spline_residual_broadband:
+            print("Smoothing residual differences between no_wiggle and "
+                  "linear templates by fitting an spline.", file=sys.stderr)
+            pk_nw += get_broadband_spline(k_nw, pk_bao, pk_nw)
 
     block[template_data_section, "k_nw"] = k_nw
     block[template_data_section, "pk_nw"] = pk_nw
@@ -183,5 +187,37 @@ def eisenstein_hu(k, h, Om, Ob, ns, s=None, k_eq=None, Tcmb0=2.7255):
     P = k**ns * T**2
     P = P/P[0]
     return P
+
+
+def get_broadband_spline(k, pk_bao, pk_no_wiggle):
+    """
+    Corrects for residual scale dependence of pk_bao - pk_no_wiggle by fitting
+    a spline with the smallest smoothing parameter possible without fit BAO
+    wiggles. Return broadband correction to be added to pk_no_wiggle.
+
+    Parameters:
+        k (np.ndarray): wavenumbers in Mpc/h
+        pk_bao (np.ndarray): linear power spectrum, including BAO wiggles
+        pk_no_wiggle (np.ndarray): dewiggled power spectrum
+
+    Returns:
+        delta_pk_no_wiggle (np.ndarray): correction to be added to pk_no_wiggle
+    """
+    s_min = np.inf
+    relative_wiggles = (1 - pk_no_wiggle / pk_bao)
+    s_max = (relative_wiggles**2).sum()
+    for s in np.arange(0, s_max, 0.001):
+        spl = UnivariateSpline(k, relative_wiggles, s=s)
+        arg_peaks_spl = find_peaks(spl(k))[0]
+        arg_downs_spl = find_peaks(-spl(k))[0]
+        # If the spline oscillates it might be fitting the wiggles, discard
+        if len(arg_peaks_spl) + len(arg_downs_spl) > 1:
+            continue
+        else:
+            if s < s_min:
+                s_min = s
+    relative_wiggles_spl = UnivariateSpline(k, relative_wiggles, s=s_min)
+    delta_pk_no_wiggle = relative_wiggles_spl(k) * pk_bao
+    return delta_pk_no_wiggle
 
 

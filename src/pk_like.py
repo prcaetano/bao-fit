@@ -22,7 +22,8 @@ class BAOLikelihood(GaussianLikelihood):
                   "the data file. I'm restricting the fit to the multipoles you told me to calculate.",
                   file=sys.stderr)
             max_idx = self.n_k * pk_multipoles.shape[0]
-            self.y = self.y[:max_idx]
+            self.data_y = self.data_y[:max_idx]
+            self.data_x = self.data_x[:max_idx]
             self.cov = self.cov[:max_idx,:max_idx]
             self.inv_cov = self.inv_cov[:max_idx,:max_idx]
         else:

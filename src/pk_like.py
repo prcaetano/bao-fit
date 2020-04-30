@@ -26,6 +26,8 @@ class BAOLikelihood(GaussianLikelihood):
             self.data_x = self.data_x[:max_idx]
             self.cov = self.cov[:max_idx,:max_idx]
             self.inv_cov = self.inv_cov[:max_idx,:max_idx]
+            if not self.likelihood_only:
+                self.chol = np.linalg.cholesky(self.cov)
         else:
             pk_multipoles = pk_multipoles[:self.n_data_multipoles]
 

@@ -42,7 +42,7 @@ class BAOLikelihood(GaussianLikelihood):
     def build_covariance(self):
         covdata_fname = self.options.get_string("cov_fname")
         self.cov = np.loadtxt(covdata_fname)
-        mask = np.repeat(np.atleast_2d(self.mask_k), 2, axis=0).flatten()
+        mask = np.repeat(np.atleast_2d(self.mask_k), self.n_data_multipoles, axis=0).flatten()
         self.cov = self.cov[mask][:,mask]
         return self.cov
 

@@ -25,7 +25,7 @@ class BAOLikelihood(GaussianLikelihood):
             self.data_y = self.data_y[:max_idx]
             self.data_x = self.data_x[:max_idx]
             self.cov = self.cov[:max_idx,:max_idx]
-            self.inv_cov = self.inv_cov[:max_idx,:max_idx]
+            self.inv_cov = self.build_inverse_covariance()
             if not self.likelihood_only:
                 self.chol = np.linalg.cholesky(self.cov)
         else:
@@ -48,6 +48,19 @@ class BAOLikelihood(GaussianLikelihood):
         mask = np.repeat(np.atleast_2d(self.mask_k), self.n_data_multipoles, axis=0).flatten()
         self.cov = self.cov[mask][:,mask]
         return self.cov
+
+
+    def build_inverse_covariance(self):
+        nsamples_cov = self.options.get_int("nsamples_covariance", 0)
+        if nsamples_cov == 0:
+            hartlap_correction = 1.
+        else:
+            hartlap_correction = (nsamples_cov - self.cov.shape[0] - 2) / (nsamples_cov - 1)
+            if hartlap_correction < 0:
+                print("ERROR: Too small number of samples used for covariance calculation "
+                      " The hartlap factor is undefined. Aborting.", file=sys.stderr)
+                raise RuntimeError
+        return hartlap_correction * np.linalg.inv(self.cov)
 
 
     def build_data(self):
